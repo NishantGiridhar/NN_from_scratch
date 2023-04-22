@@ -1,7 +1,7 @@
 # %%
 
-import autograd.numpy as np
-from autograd import grad
+import numpy as np
+
 
 # tanh and derivative
 def tanh(x):
@@ -15,8 +15,7 @@ def relU(x):
     return np.maximum(0, x)
 
 def drelU(x):
-    a = np.zeros(x.shape,dtype=np.float32)
-    return np.maximum(a, x)
+    return np.maximum(0, 1)
 
 # Sigmoid and derivative
 def sigmoid(x):
@@ -32,8 +31,8 @@ def softmax(x):
     return exps / np.sum(exps)
 
 def dsoftmax(x):
-    shiftx = x - np.max(x)
-    exps = np.exp(shiftx)
-    return exps/np.sum(exps)*(1-exps/np.sum(exps))
+    # shiftx = x - np.max(x)
+    # exps = np.exp(shiftx)
+    return 1 #exps/np.sum(exps)*(1-exps/np.sum(exps))
 
 # %%
