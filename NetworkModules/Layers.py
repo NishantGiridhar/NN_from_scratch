@@ -15,23 +15,28 @@ class GenericLayer:
 
 class FullyConnectedLinearLayer(GenericLayer):
     def __init__(self, input_size, output_size): 
-        self.weights = np.random.randn(input_size, output_size)* np.sqrt(1 / input_size)
+        self.weights = np.random.randn(input_size, output_size).T* np.sqrt(1 / input_size)
         self.biases = np.random.randn(output_size, 1)
 
     def forward(self, input):
         self.input = input
-        self.output = np.dot(self.weights.T, input) + self.biases
+        self.output = np.dot(self.weights, input) + self.biases
         return self.output
     
-    def backward(self, output_gradient, learning_rate):
+    def backward(self, output_gradient, learning_rate, _reg = False, _reg_lam = 0.2):
         
         M  = output_gradient.shape[1]
+        # % \\print(f'Shape of M is {M}')
+        # input()
 
-        input_gradient = np.dot(self.weights, output_gradient) / M
+        input_gradient = np.dot(self.weights.T, output_gradient) 
 
-        weight_update = np.dot(output_gradient, self.input.T).T / M   # Why is the .T necessary
+        weight_update = np.dot(output_gradient, self.input.T) / M   # Why is the .T necessary
         bias_update   = np.sum(output_gradient, axis = 1, keepdims = True) / M
-        self.weights += - learning_rate * weight_update
+        if _reg == False:
+            self.weights += - learning_rate * weight_update
+        else:
+            self.weights += - learning_rate * (weight_update + _reg_lam / M *self.weights)
         self.biases += - learning_rate * bias_update
 
         return input_gradient
@@ -41,29 +46,34 @@ class ActivationLayer(GenericLayer):
     def __init__(self, activation_function, activation_gradient):
         self.activation             = activation_function
         self.activation_gradient    = activation_gradient
+        self.keep_prob = 1
 
     def forward(self, input):
         self.input = input
         self.output = self.activation(input) 
         return self.output
     
-    def backward(self, output_gradient, learning_rate = None):
-        return self.activation_gradient(self.input) * output_gradient  # element wise product
+    def backward(self, output_gradient, learning_rate = None, _reg = None, _reg_lam = None):
+        return np.multiply(np.int64(self.activation_gradient(self.input)>0) , output_gradient)  # element wise product
+    
+    def _add_dropout(self, keep_prob):
+        self.keep_prob = keep_prob
+        
     
 
 
 # %%
 if __name__ == "__main__":
-    from activations import *
-    from loss_functions import *
+    from Activations import *
+    from LossFunctions import *
 
-    linear_layer_1 = FullyConnectedLinearLayer(input_size=20, output_size=10)
+    linear_layer_1 = FullyConnectedLinearLayer(input_size=25, output_size=15)
     activation_layer_1 = ActivationLayer(relU, drelU)
-    linear_layer_2 = FullyConnectedLinearLayer(input_size=10, output_size=5)
+    linear_layer_2 = FullyConnectedLinearLayer(input_size=15, output_size=10)
     activation_layer_2 = ActivationLayer(softmax, dsoftmax)
 
-    X_input = np.random.rand(20, 200)
-    Y_truth = np.random.rand(5, 200)
+    X_input = np.random.rand(25, 200)
+    Y_truth = np.random.rand(10, 200)
 
 
     print('Forward Prop')
