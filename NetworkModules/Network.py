@@ -14,8 +14,15 @@ class Network:
 
     def add_accurace_function(self, func):
         self.accuracy_function = func
-    def add_layer(self, layer):
+
+    def add_layer(self, layer, dropout_layer = False, keep_prob = 1):
         self.layers.append(layer)
+        if dropout_layer == True and isinstance(layer, FullyConnectedLinearLayer):
+            raise NotImplementedError
+        else:
+            if dropout_layer == True:
+                self.layers[-1]._add_dropout(keep_prob)
+
 
     def set_loss(self, loss_function, loss_derivative):
         self.loss = loss_function
@@ -36,7 +43,7 @@ class Network:
                 elif self.layers[l+1].activation == Activations.tanh:
                     layer.weights = np.random.randn(layer.weights.shape[0], layer.weights.shape[1]) * np.sqrt(2/(layer.weights.shape[0] + layer.weights.shape[1]))
 
-
+    
     def inference(self, x_pred):
         next_layer_input = x_pred
         for layer in self.layers:
@@ -65,22 +72,33 @@ class Network:
         return None
     
 
-    def _stochastic_gradient_descent(self, learning_rate, epochs):
+    def _stochastic_gradient_descent(self, learning_rate, epochs, L2_reg = False, L2_lambda = 0.2):
         samples = self.x_train.shape[1]
 
         self._iteration_summary(0, None)
         for i in range(epochs):
             error = 0
             for j in range(samples):
+                # Forward Pass
                 next_layer_input = self.x_train[:,[j]]
                 for layer in self.layers:
                     next_layer_input = layer.forward(next_layer_input)
+                    
+                    if isinstance(layer, ActivationLayer):
+                        dropout_mask = np.random.rand(next_layer_input.shape[0], next_layer_input.shape[1]) < layer.keep_prob
+                        next_layer_input = np.multiply(next_layer_input, dropout_mask) / layer.keep_prob
                 
-                error += self.loss(next_layer_input, self.y_train[:,[j]]) 
 
+                if L2_reg == False:
+                    L2_loss = 0
+                else:
+                    L2_loss = L2_lambda / 2 * np.sum(np.linalg.norm(layer.weights, 'fro') for layer in self.layers if isinstance(layer, FullyConnectedLinearLayer)) 
+                error += self.loss(next_layer_input, self.y_train[:,[j]]) + L2_loss
+
+                # Backward Pass
                 gradient_next = self.loss_derivative(next_layer_input, self.y_train[:,[j]])
                 for layer in reversed(self.layers):
-                    gradient_next = layer.backward(gradient_next, learning_rate)
+                    gradient_next = layer.backward(gradient_next, learning_rate, L2_reg, L2_lambda)
 
 
             if (i%5 == 0) or (i == epochs-1):
@@ -88,7 +106,79 @@ class Network:
 
         print('Training Complete')
         return None
+    
+
+
+    def _mini_batch_gradient_descent(self, batch_size, learning_rate, epochs, L2_reg = False, L2_lambda = 0.2, rate_decay = 1, seed = None):
+        batches = self._shuffle_mini_batches(self.x_train, self.y_train, batch_size, seed)
+        N_batches = len(batches)
+
+        self._iteration_summary(0, None)
+
+        for i in range(epochs):
+            error = 0
+            decayed_learning_rate = rate_decay**i * learning_rate
+            for j in range(N_batches):
+                batch_size = batches[j][0].shape[1]
+                # Forward Pass
+                next_layer_input = batches[j][0]
+                for layer in self.layers:
+                    next_layer_input = layer.forward(next_layer_input)
+                    if isinstance(layer, ActivationLayer):
+                        dropout_mask = np.random.rand(next_layer_input.shape[0], next_layer_input.shape[1]) < layer.keep_prob
+                        next_layer_input = np.multiply(next_layer_input, dropout_mask) / layer.keep_prob
+                    
+                if L2_reg == False:
+                    L2_loss = 0
+                else:
+                    L2_loss = L2_lambda / 2 /batch_size * np.sum(np.linalg.norm(layer.weights, 'fro') for layer in self.layers if isinstance(layer, FullyConnectedLinearLayer)) 
+                error += self.loss(next_layer_input, batches[j][1]) + L2_loss
                 
+                # Backward Pass
+                gradient_next = self.loss_derivative(next_layer_input, batches[j][1])
+                for layer in reversed(self.layers):
+                    gradient_next = layer.backward(gradient_next, decayed_learning_rate, L2_reg, L2_lambda)
+
+            if (i%5 == 0) or (i == epochs-1):
+                self._iteration_summary(i+1, error/N_batches)
+        
+        print('Training Complete')
+        return None
+
+
+
+
+
+    def _shuffle_mini_batches(self, X, Y, batch_size=64, seed = None):
+        np.random.seed(seed)
+
+        M = X.shape[1]
+        mini_batches = []
+
+        # Shuffle X, Y
+        permutation = list(np.random.permutation(M))
+        shuffled_X = X[:, permutation]
+        shuffled_Y = Y[:, permutation]
+
+        inc = batch_size
+
+        num_complete_minibatches = int(np.floor(M / inc))
+
+        for k in range(num_complete_minibatches):
+            mini_batch_X = shuffled_X[:,k*inc:(k+1)*inc]
+            mini_batch_Y = shuffled_Y[:,k*inc:(k+1)*inc]
+
+            mini_batch = (mini_batch_X, mini_batch_Y)
+            mini_batches.append(mini_batch)
+        
+        if M % inc != 0:
+                mini_batch_X = shuffled_X[:,(num_complete_minibatches)*inc:]
+                mini_batch_Y = shuffled_Y[:,(num_complete_minibatches)*inc:]
+                
+                mini_batch = (mini_batch_X, mini_batch_Y)
+                mini_batches.append(mini_batch)
+        
+        return mini_batches
 
 
     def _iteration_summary(self, iter, _error):
