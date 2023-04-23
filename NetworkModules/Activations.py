@@ -26,13 +26,14 @@ def dsigmoid(x):
 
 # softmax and derivative
 def softmax(x):
-    shiftx = x - np.max(x)
+    shiftx = x - np.max(x, axis = 0, keepdims=True)
     exps = np.exp(shiftx)
-    return exps / np.sum(exps)
+    den = np.sum(exps, axis = 0, keepdims=True)
+    return exps / den
 
 def dsoftmax(x):
     # shiftx = x - np.max(x)
     # exps = np.exp(shiftx)
-    return 1 #exps/np.sum(exps)*(1-exps/np.sum(exps))
+    return 1#exps/np.sum(exps, axis = 0)*(1-exps/np.sum(exps, axis = 0))
 
 # %%
