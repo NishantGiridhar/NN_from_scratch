@@ -120,10 +120,13 @@ class Network:
             decayed_learning_rate = rate_decay**i * learning_rate
             for j in range(N_batches):
                 batch_size = batches[j][0].shape[1]
+
                 # Forward Pass
                 next_layer_input = batches[j][0]
                 for layer in self.layers:
+                
                     next_layer_input = layer.forward(next_layer_input)
+                
                     if isinstance(layer, ActivationLayer):
                         dropout_mask = np.random.rand(next_layer_input.shape[0], next_layer_input.shape[1]) < layer.keep_prob
                         next_layer_input = np.multiply(next_layer_input, dropout_mask) / layer.keep_prob
@@ -132,6 +135,7 @@ class Network:
                     L2_loss = 0
                 else:
                     L2_loss = L2_lambda / 2 /batch_size * np.sum(np.linalg.norm(layer.weights, 'fro') for layer in self.layers if isinstance(layer, FullyConnectedLinearLayer)) 
+                
                 error += self.loss(next_layer_input, batches[j][1]) + L2_loss
                 
                 # Backward Pass
@@ -139,6 +143,99 @@ class Network:
                 for layer in reversed(self.layers):
                     gradient_next = layer.backward(gradient_next, decayed_learning_rate, L2_reg, L2_lambda)
 
+            if (i%5 == 0) or (i == epochs-1):
+                self._iteration_summary(i+1, error/N_batches)
+        
+        print('Training Complete')
+        return None
+    
+    def _mini_batch_gradient_descent_with_momentum(self, batch_size, learning_rate, epochs, L2_reg = False, L2_lambda = 0.2, rate_decay = 1, seed = None, beta = 0.9):
+        batches = self._shuffle_mini_batches(self.x_train, self.y_train, batch_size, seed)
+        N_batches = len(batches)
+
+        self._iteration_summary(0, None)
+
+        for i in range(epochs):
+            error = 0
+            decayed_learning_rate = rate_decay**i * learning_rate
+            for j in range(N_batches):
+                batch_size = batches[j][0].shape[1]
+
+                # Forward Pass
+                next_layer_input = batches[j][0]
+                for layer in self.layers:
+                
+                    next_layer_input = layer.forward(next_layer_input)
+                
+                    if isinstance(layer, ActivationLayer):
+                        dropout_mask = np.random.rand(next_layer_input.shape[0], next_layer_input.shape[1]) < layer.keep_prob
+                        next_layer_input = np.multiply(next_layer_input, dropout_mask) / layer.keep_prob
+                    
+                if L2_reg == False:
+                    L2_loss = 0
+                else:
+                    L2_loss = L2_lambda / 2 /batch_size * np.sum(np.linalg.norm(layer.weights, 'fro') for layer in self.layers if isinstance(layer, FullyConnectedLinearLayer)) 
+                
+                error += self.loss(next_layer_input, batches[j][1]) + L2_loss
+                
+                # Backward Pass
+                gradient_next = self.loss_derivative(next_layer_input, batches[j][1])
+                for layer in reversed(self.layers):
+                    if isinstance(layer, FullyConnectedLinearLayer):
+                        gradient_next = layer.backward_with_momentum(gradient_next, decayed_learning_rate, L2_reg, L2_lambda, beta)
+                    else:
+                        gradient_next = layer.backward(gradient_next, decayed_learning_rate, L2_reg, L2_lambda)
+            if (i%5 == 0) or (i == epochs-1):
+                self._iteration_summary(i+1, error/N_batches)
+        
+        print('Training Complete')
+        return None
+    
+    def _mini_batch_Adam(self, batch_size, learning_rate, epochs, L2_reg = False, L2_lambda = 0.2, rate_decay = 1, seed = None, beta_1 = 0.9, beta_2 = 0.999, adaptive_learning_rate = 'no'):
+        batches = self._shuffle_mini_batches(self.x_train, self.y_train, batch_size, seed)
+        N_batches = len(batches)
+
+        self._iteration_summary(0, None)
+        t = 0
+        for i in range(epochs):
+            error = 0
+
+            if adaptive_learning_rate == 'exponential decay':
+                decayed_learning_rate = rate_decay**i * learning_rate
+            else:
+                decayed_learning_rate = learning_rate
+
+            for j in range(N_batches):
+                t += 1
+
+                batch_size = batches[j][0].shape[1]
+
+
+                #####################  Forward Propagation
+                next_layer_input = batches[j][0]
+                for layer in self.layers:
+                
+                    next_layer_input = layer.forward(next_layer_input)
+                
+                    if isinstance(layer, ActivationLayer):
+                        dropout_mask = np.random.rand(next_layer_input.shape[0], next_layer_input.shape[1]) < layer.keep_prob
+                        next_layer_input = np.multiply(next_layer_input, dropout_mask) / layer.keep_prob
+                
+                #####################  L2 regularization
+                if L2_reg == False:
+                    L2_loss = 0
+                else:
+                    L2_loss = L2_lambda / 2 /batch_size * np.sum(np.linalg.norm(layer.weights, 'fro') for layer in self.layers if isinstance(layer, FullyConnectedLinearLayer)) 
+                
+                error += self.loss(next_layer_input, batches[j][1]) + L2_loss
+                
+                #####################  Backward Propagation
+                gradient_next = self.loss_derivative(next_layer_input, batches[j][1])
+                for layer in reversed(self.layers):
+                    if isinstance(layer, FullyConnectedLinearLayer):
+                        gradient_next = layer.backward_with_Adam(gradient_next, decayed_learning_rate, int(t), L2_reg, L2_lambda, beta_1, beta_2)
+                    else:
+                        gradient_next = layer.backward(gradient_next, decayed_learning_rate, L2_reg, L2_lambda)
             if (i%5 == 0) or (i == epochs-1):
                 self._iteration_summary(i+1, error/N_batches)
         
