@@ -15,8 +15,19 @@ class GenericLayer:
 
 class FullyConnectedLinearLayer(GenericLayer):
     def __init__(self, input_size, output_size): 
+        
+        # Gradient Descent Terms
         self.weights = np.random.randn(input_size, output_size).T* np.sqrt(1 / input_size)
         self.biases = np.random.randn(output_size, 1)
+        
+        # Momentum Terms
+        self.vdW = np.zeros_like(self.weights)
+        self.vdb = np.zeros_like(self.biases)
+
+        # RMS Prop Terms
+        self.sdW = np.zeros_like(self.weights)
+        self.sdb = np.zeros_like(self.biases)
+
 
     def forward(self, input):
         self.input = input
@@ -26,19 +37,75 @@ class FullyConnectedLinearLayer(GenericLayer):
     def backward(self, output_gradient, learning_rate, _reg = False, _reg_lam = 0.2):
         
         M  = output_gradient.shape[1]
-        # % \\print(f'Shape of M is {M}')
-        # input()
 
         input_gradient = np.dot(self.weights.T, output_gradient) 
 
         weight_update = np.dot(output_gradient, self.input.T) / M   # Why is the .T necessary
         bias_update   = np.sum(output_gradient, axis = 1, keepdims = True) / M
+
         if _reg == False:
             self.weights += - learning_rate * weight_update
         else:
             self.weights += - learning_rate * (weight_update + _reg_lam / M *self.weights)
         self.biases += - learning_rate * bias_update
 
+        return input_gradient
+    
+
+    def backward_with_momentum(self, output_gradient, learning_rate, _reg = False, _reg_lam = 0.2, beta = 0.9):
+        
+        M  = output_gradient.shape[1]
+
+        input_gradient = np.dot(self.weights.T, output_gradient) 
+
+        
+        bias_update_grad   = np.sum(output_gradient, axis = 1, keepdims = True) / M
+        self.vdb = beta * self.vdb + (1 - beta)*bias_update_grad
+
+        if _reg == False:
+            weight_update_grad = np.dot(output_gradient, self.input.T) / M   
+            self.vdW = beta * self.vdW + (1 - beta)*weight_update_grad
+        else:
+            weight_update_grad = np.dot(output_gradient, self.input.T) / M  + _reg_lam / M *self.weights
+            self.vdW = beta * self.vdW + (1 - beta)*weight_update_grad
+        
+        self.biases += - learning_rate * self.vdb
+        self.weights += - learning_rate * self.vdW
+        
+        return input_gradient
+
+
+    def backward_with_Adam(self, output_gradient, learning_rate, iteration, _reg = False, _reg_lam = 0.2, beta_1 = 0.9, beta_2 = 0.999):
+        
+        M  = output_gradient.shape[1]
+
+        input_gradient = np.dot(self.weights.T, output_gradient) 
+
+        
+        bias_update_grad   = np.sum(output_gradient, axis = 1, keepdims = True) / M
+        self.vdb = beta_1 * self.vdb + (1 - beta_1)*bias_update_grad
+        self.sdb = beta_2 * self.sdb + (1 - beta_2)*np.power(bias_update_grad, 2)
+
+        # Bias Correction
+        vdb_corr  = np.divide(self.vdb , 1 - np.power(beta_1, (iteration)))
+        sdb_corr  = np.divide(self.sdb , 1 - np.power(beta_2, (iteration)))
+
+        if _reg == False:
+            weight_update_grad = np.dot(output_gradient, self.input.T) / M   
+        else:
+            weight_update_grad = np.dot(output_gradient, self.input.T) / M  + _reg_lam / M *self.weights
+        
+        self.vdW = beta_1 * self.vdW + (1 - beta_1) * weight_update_grad
+        self.sdW = beta_2 * self.sdW + (1 - beta_2) * np.power(weight_update_grad, 2)
+        
+        # Bias Correction
+        vdW_corr = np.divide(self.vdW , 1 - np.power(beta_1, (iteration)))
+        sdW_corr = np.divide(self.sdW , 1 - np.power(beta_2, (iteration)))
+
+        # Update
+        self.biases += - learning_rate * np.divide(vdb_corr , np.sqrt(sdb_corr) + 1e-8)
+        self.weights += - learning_rate * np.divide(vdW_corr , np.sqrt(sdW_corr) + 1e-8)
+        
         return input_gradient
 
 
