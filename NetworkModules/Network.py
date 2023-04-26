@@ -191,19 +191,24 @@ class Network:
         print('Training Complete')
         return None
     
-    def _mini_batch_Adam(self, batch_size, learning_rate, epochs, L2_reg = False, L2_lambda = 0.2, rate_decay = 1, seed = None, beta_1 = 0.9, beta_2 = 0.999, adaptive_learning_rate = 'no'):
+    def _mini_batch_Adam(self, batch_size, learning_rate, epochs, L2_reg = False, L2_lambda = 0.2, rate_decay = 1, seed = None, beta_1 = 0.9, beta_2 = 0.999, adaptive_learning_rate = 'no', decay_rate=0.3, schedule_interval=10):
         batches = self._shuffle_mini_batches(self.x_train, self.y_train, batch_size, seed)
         N_batches = len(batches)
 
-        self._iteration_summary(0, None)
+        self._iteration_summary(0, None, None)
         t = 0
         for i in range(epochs):
             error = 0
 
             if adaptive_learning_rate == 'exponential decay':
                 decayed_learning_rate = rate_decay**i * learning_rate
-            else:
+            elif adaptive_learning_rate == 'scheduled':
+                decayed_learning_rate = 1 / (1 + decay_rate * np.floor(i/schedule_interval)) * learning_rate
+            elif adaptive_learning_rate == 'no':
                 decayed_learning_rate = learning_rate
+            else:
+                print('No such learning rate strategy')
+                raise NotImplementedError
 
             for j in range(N_batches):
                 t += 1
@@ -237,7 +242,7 @@ class Network:
                     else:
                         gradient_next = layer.backward(gradient_next, decayed_learning_rate, L2_reg, L2_lambda)
             if (i%5 == 0) or (i == epochs-1):
-                self._iteration_summary(i+1, error/N_batches)
+                self._iteration_summary(i+1, error/N_batches, decayed_learning_rate)
         
         print('Training Complete')
         return None
@@ -278,9 +283,9 @@ class Network:
         return mini_batches
 
 
-    def _iteration_summary(self, iter, _error):
+    def _iteration_summary(self, iter, _error, learning_rate):
         if iter == 0:
-            print('{:<10s}{:>5s}{:>20s}{:>20s}'.format('iter','Loss','Train Accuracy', 'Val Accuracy'))
+            print('{:<10s}{:>5s}{:>20s}{:>20s}{:>20s}'.format('iter','Loss', 'learn rate', 'Train Accuracy', 'Val Accuracy'))
         else:
             if self.x_val.any() != None:
                 train_accuracy = round(self.accuracy_function(self.x_train, self.y_train), 2)
@@ -288,5 +293,5 @@ class Network:
             else:
                 val_accuracy = 0
                 train_accuracy = 0
-            print('{:<10}{:>5}{:>20}{:>20}'.format(iter, round(_error,2), train_accuracy, val_accuracy))
+            print('{:<10}{:>5}{:>20}{:>20}{:>20}'.format(iter, round(_error,2), round(learning_rate, 5), train_accuracy, val_accuracy))
 # %%
