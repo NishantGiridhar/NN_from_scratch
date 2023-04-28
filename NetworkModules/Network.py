@@ -38,10 +38,11 @@ class Network:
     def _reinitalize_weights(self):
         for l, layer in enumerate(self.layers):
             if isinstance(layer, FullyConnectedLinearLayer):
-                if self.layers[l+1].activation == Activations.relU:
-                    layer.weights = np.random.randn(layer.weights.shape[0], layer.weights.shape[1]) * np.sqrt(2/layer.weights.shape[0] )
-                elif self.layers[l+1].activation == Activations.tanh:
-                    layer.weights = np.random.randn(layer.weights.shape[0], layer.weights.shape[1]) * np.sqrt(2/(layer.weights.shape[0] + layer.weights.shape[1]))
+                if layer != self.layers[-1]:
+                    if self.layers[l+1].activation == Activations.relU:
+                        layer.weights = np.random.randn(layer.weights.shape[0], layer.weights.shape[1]) * np.sqrt(2/layer.weights.shape[0] )
+                    elif self.layers[l+1].activation == Activations.tanh:
+                        layer.weights = np.random.randn(layer.weights.shape[0], layer.weights.shape[1]) * np.sqrt(2/(layer.weights.shape[0] + layer.weights.shape[1]))
 
     
     def inference(self, x_pred):
